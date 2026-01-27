@@ -4,6 +4,7 @@ temp_audio/
 # Persönliche Frühsport-Skripte (längere Versionen)
 Skripte/fruehsport-standard-15min.*
 Skripte/fruehsport-intensiv-30min.*
+Skripte/tagesabschluss.*
 
 # Python
 __pycache__/
