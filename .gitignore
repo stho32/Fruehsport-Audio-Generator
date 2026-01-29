@@ -1,10 +1,10 @@
 # Temporäre Audio-Dateien
 temp_audio/
 
-# Persönliche Frühsport-Skripte (längere Versionen)
-Skripte/fruehsport-standard-15min.*
-Skripte/fruehsport-intensiv-30min.*
-Skripte/tagesabschluss.*
+# Alle Skripte ignorieren, außer dem Basis-Beispiel
+Skripte/*
+!Skripte/fruehsport-basis-5min.md
+!Skripte/fruehsport-basis-5min.mp3
 
 # Python
 __pycache__/

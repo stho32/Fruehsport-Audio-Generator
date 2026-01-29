@@ -4,6 +4,7 @@
 # dependencies = [
 #     "openai>=1.0.0",
 #     "pydub>=0.25.1",
+#     "audioop-lts>=0.2.1; python_version>='3.13'",
 # ]
 # ///
 
@@ -24,6 +25,21 @@ from pathlib import Path
 
 from openai import AsyncOpenAI
 from pydub import AudioSegment
+
+
+def check_ffmpeg() -> None:
+    """Prüft ob ffmpeg installiert ist (benötigt von pydub)."""
+    if shutil.which("ffmpeg") is None:
+        print("FEHLER: ffmpeg ist nicht installiert.")
+        print()
+        print("ffmpeg wird für die Audio-Verarbeitung benötigt.")
+        print("Installation:")
+        print("  Ubuntu/Debian: sudo apt install ffmpeg")
+        print("  Fedora:        sudo dnf install ffmpeg")
+        print("  Arch:          sudo pacman -S ffmpeg")
+        print("  macOS:         brew install ffmpeg")
+        print("  Windows:       https://ffmpeg.org/download.html")
+        sys.exit(1)
 
 # Konfiguration
 MAX_CHUNK_SIZE = 4000  # OpenAI TTS Limit
@@ -237,6 +253,7 @@ async def convert_script_to_mp3(client: AsyncOpenAI, md_file: Path) -> bool:
 
 
 async def main():
+    check_ffmpeg()
     print(f"Suche nach Skripten in {SKRIPTE_DIR.name}/...")
 
     md_files = get_md_files()
