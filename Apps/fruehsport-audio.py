@@ -12,6 +12,7 @@
 fruehsport-audio: Konvertiert Frühsport-Anleitungsskripte zu MP3-Audiodateien.
 
 Unterstützt #PAUSE X Anweisungen für kontrollierte Pausen (Stille).
+Unterstützt #INCLUDE datei.mp3 zum Einbinden externer Audio-Dateien.
 
 Anforderungen: siehe ../Anforderungen/fruehsport-audio.md
 """
@@ -55,12 +56,19 @@ SKRIPTE_DIR = SCRIPT_DIR.parent / "Skripte"
 # Regex für Pause-Anweisung
 PAUSE_PATTERN = re.compile(r"^#PAUSE\s+(\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 
+# Regex für Include-Anweisung
+INCLUDE_PATTERN = re.compile(r"^#INCLUDE\s+(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+
+# Regex für Start-Marker (alles darüber wird ignoriert, z.B. Materiallisten)
+START_PATTERN = re.compile(r"^#START\s*$", re.MULTILINE | re.IGNORECASE)
+
 
 @dataclass
 class Segment:
-    """Ein Segment im Skript - entweder Text oder Pause."""
-    content: str | int  # Text oder Pausendauer in Sekunden
+    """Ein Segment im Skript - Text, Pause oder Include."""
+    content: str | int  # Text, Pausendauer in Sekunden, oder Dateiname
     is_pause: bool
+    is_include: bool = False
 
 
 def get_md_files() -> list[Path]:
@@ -82,24 +90,41 @@ def get_missing_mp3s(md_files: list[Path]) -> list[Path]:
 
 
 def parse_script(text: str) -> list[Segment]:
-    """Parst ein Skript und extrahiert Text-Segmente und Pausen."""
+    """Parst ein Skript und extrahiert Text-Segmente, Pausen und Includes."""
     segments: list[Segment] = []
 
-    # Text anhand von #PAUSE Anweisungen aufteilen
-    parts = PAUSE_PATTERN.split(text)
+    # Falls #START vorhanden, nur den Teil danach verwenden
+    start_match = START_PATTERN.search(text)
+    if start_match:
+        text = text[start_match.end():]
 
-    # parts enthält abwechselnd: [text, pausendauer, text, pausendauer, ...]
-    for i, part in enumerate(parts):
-        if i % 2 == 0:
-            # Text-Segment
-            cleaned = part.strip()
-            if cleaned:
-                segments.append(Segment(content=cleaned, is_pause=False))
-        else:
-            # Pausendauer
-            duration = int(part)
-            if duration > 0:
-                segments.append(Segment(content=duration, is_pause=True))
+    # Alle Direktiven mit Positionen finden
+    directives = []
+    for m in PAUSE_PATTERN.finditer(text):
+        directives.append((m.start(), m.end(), "pause", int(m.group(1))))
+    for m in INCLUDE_PATTERN.finditer(text):
+        directives.append((m.start(), m.end(), "include", m.group(1)))
+    directives.sort(key=lambda x: x[0])
+
+    # Text zwischen Direktiven verarbeiten
+    pos = 0
+    for start, end, dtype, value in directives:
+        text_before = text[pos:start].strip()
+        if text_before:
+            segments.append(Segment(content=text_before, is_pause=False))
+
+        if dtype == "pause":
+            if value > 0:
+                segments.append(Segment(content=value, is_pause=True))
+        elif dtype == "include":
+            segments.append(Segment(content=value, is_pause=False, is_include=True))
+
+        pos = end
+
+    # Restlicher Text nach der letzten Direktive
+    remaining = text[pos:].strip()
+    if remaining:
+        segments.append(Segment(content=remaining, is_pause=False))
 
     return segments
 
@@ -192,10 +217,12 @@ async def convert_script_to_mp3(client: AsyncOpenAI, md_file: Path) -> bool:
         return False
 
     segments = parse_script(text)
-    text_segments = [s for s in segments if not s.is_pause]
+    text_segments = [s for s in segments if not s.is_pause and not s.is_include]
     pause_segments = [s for s in segments if s.is_pause]
+    include_segments = [s for s in segments if s.is_include]
 
-    print(f"  - Segmente: {len(segments)} ({len(text_segments)} Sprache, {len(pause_segments)} Pausen)")
+    include_info = f", {len(include_segments)} Include(s)" if include_segments else ""
+    print(f"  - Segmente: {len(segments)} ({len(text_segments)} Sprache, {len(pause_segments)} Pausen{include_info})")
     print(f"  - Stimme: {VOICE}")
 
     # Temporäres Verzeichnis für Segmente
@@ -228,6 +255,14 @@ async def convert_script_to_mp3(client: AsyncOpenAI, md_file: Path) -> bool:
             pause_file = temp_dir / f"segment_{idx:04d}_pause.mp3"
             create_silence(segment.content, pause_file)
             audio_files.append(pause_file)
+        elif segment.is_include:
+            # Externe MP3-Datei einbinden
+            include_file = SKRIPTE_DIR / segment.content
+            if include_file.exists():
+                audio_files.append(include_file)
+                print(f"    Include: {segment.content}")
+            else:
+                print(f"    WARNUNG: Include-Datei nicht gefunden: {segment.content}")
         else:
             # Text-Segment(e) verarbeiten
             chunk_files = await process_text_segment(idx, segment.content)
@@ -239,9 +274,9 @@ async def convert_script_to_mp3(client: AsyncOpenAI, md_file: Path) -> bool:
         shutil.move(audio_files[0], output_file)
     else:
         combine_audio_files(audio_files, output_file)
-        # Temporäre Dateien löschen
+        # Temporäre Dateien löschen (keine Include-Dateien!)
         for audio_file in audio_files:
-            if audio_file.exists():
+            if audio_file.exists() and audio_file.parent == temp_dir:
                 audio_file.unlink()
 
     # Temporäres Verzeichnis aufräumen
