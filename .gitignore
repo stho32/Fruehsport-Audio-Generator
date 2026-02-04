@@ -1,6 +1,9 @@
 # Temporäre Audio-Dateien
 temp_audio/
 
+# Musik-Dateien
+Musik/
+
 # Alle Skripte ignorieren, außer dem Basis-Beispiel
 Skripte/*
 !Skripte/fruehsport-basis-5min.md

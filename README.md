@@ -1,81 +1,94 @@
 # Fruehsport-Audio
 
-Dieses Repository enthält UV-basierte Python-Anwendungen als Single-File-Scripts zur Erstellung von Audio-Anleitungen für Frühsport.
+Konvertiert Markdown-Skripte zu gesprochenen MP3-Audiodateien mit OpenAI Text-to-Speech.
 
-## Struktur
+Ideal für Frühsport-Anleitungen, Haushalts-Routinen oder andere geführte Audio-Programme.
 
-- **Anforderungen/** - Anforderungsdokumente für neue Apps (Markdown-Dateien)
-- **Apps/** - Fertige UV-Single-File-Scripts
-- **Skripte/** - Frühsport-Anleitungsskripte im Markdown-Format
+## Demo
+
+Hör dir das Beispiel an:
+
+| Skript | Audio | Dauer |
+|--------|-------|-------|
+| [fruehsport-basis-5min.md](Skripte/fruehsport-basis-5min.md) | [fruehsport-basis-5min.mp3](Skripte/fruehsport-basis-5min.mp3) | 4:51 |
+
+## Features
+
+- **Text-to-Speech** via OpenAI API (Stimme: nova)
+- **Pausen** mit `#PAUSE X` (X Sekunden Stille)
+- **Audio einbinden** mit `#INCLUDE datei.mp3`
+- **Materiallisten** vor `#START` werden ignoriert
+- **Automatische Chunk-Aufteilung** für lange Texte
+- **Parallele API-Anfragen** für schnelle Verarbeitung
+
+## Voraussetzungen
+
+- [uv](https://docs.astral.sh/uv/) (Python Package Manager)
+- [ffmpeg](https://ffmpeg.org/) (Audio-Verarbeitung)
+- OpenAI API-Key als `OPENAI_API_KEY` Umgebungsvariable
 
 ## Verwendung
-
-### App ausführen
 
 ```bash
 uv run Apps/fruehsport-audio.py
 ```
 
-### Neue App erstellen
-
-1. Anforderungsdokument in `Anforderungen/` anlegen
-2. App in `Apps/` implementieren
-
-## Apps
-
-| App | Beschreibung |
-|-----|--------------|
-| [fruehsport-audio.py](Apps/fruehsport-audio.py) | Konvertiert Frühsport-Skripte zu MP3-Audiodateien mit Pausen und Countdowns |
-
-## Beispiel
-
-Ein fertiges Beispiel zum Anhören:
-
-| Skript | Audio | Beschreibung |
-|--------|-------|--------------|
-| [fruehsport-basis-5min.md](Skripte/fruehsport-basis-5min.md) | [fruehsport-basis-5min.mp3](Skripte/fruehsport-basis-5min.mp3) | 5-Minuten Basis-Mobilisation für den Rücken |
+Das Script findet automatisch alle `.md` Dateien in `Skripte/` ohne zugehörige `.mp3` und konvertiert sie.
 
 ## Skript-Format
 
-Die Frühsport-Skripte unterstützen folgende Syntax:
-
 ```markdown
-# Mein Frühsport
+# Mein Programm
 
-Willkommen zum Frühsport!
+Materialliste (wird ignoriert):
+- Item 1
+- Item 2
 
-#PAUSE 3
+#START
 
-Erste Übung: Rückenschaukel
-#PAUSE 2
-Und los!
+Willkommen! Wir beginnen mit der ersten Übung.
+
+#PAUSE 5
+
+Arme nach oben strecken.
+
 #PAUSE 30
 
 Sehr gut! Nächste Übung...
+
+#INCLUDE entspannungsmusik.mp3
 ```
 
-### Pause-Syntax
+### Direktiven
 
-- `#PAUSE X` - Fügt eine Pause von X Sekunden ein
-- Beispiel: `#PAUSE 30` fügt 30 Sekunden Stille ein
+| Direktive | Beschreibung |
+|-----------|--------------|
+| `#START` | Markiert den Beginn des gesprochenen Teils. Alles davor (z.B. Materiallisten) wird ignoriert. |
+| `#PAUSE X` | Fügt X Sekunden Stille ein. |
+| `#INCLUDE datei.mp3` | Bindet eine externe MP3-Datei ein. |
 
-## UV Single-File Script Format
+## Projektstruktur
 
-Jede App ist ein einzelnes Python-Script mit eingebetteten Abhängigkeiten:
-
-```python
-#!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "package1",
-#     "package2>=1.0",
-# ]
-# ///
-
-"""
-App-Beschreibung hier.
-"""
-
-# Code hier...
 ```
+├── Apps/
+│   └── fruehsport-audio.py    # Hauptanwendung
+├── Skripte/
+│   ├── *.md                   # Eingabe-Skripte
+│   └── *.mp3                  # Generierte Audio-Dateien
+├── Anforderungen/             # Spezifikationen
+└── Musik/                     # Hintergrundmusik (optional, gitignored)
+```
+
+## Tipps
+
+**Hintergrundmusik untermischen:**
+
+```bash
+ffmpeg -i skript.mp3 -i musik.wav \
+  -filter_complex "[1:a]volume=0.1[m];[0:a][m]amix=inputs=2:duration=first[out]" \
+  -map "[out]" skript-mit-musik.mp3
+```
+
+## Lizenz
+
+MIT
