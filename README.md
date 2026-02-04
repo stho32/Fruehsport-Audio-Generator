@@ -6,11 +6,7 @@ Ideal für Frühsport-Anleitungen, Haushalts-Routinen oder andere geführte Audi
 
 ## Demo
 
-Hör dir das Beispiel an:
-
-| Skript | Audio | Dauer |
-|--------|-------|-------|
-| [fruehsport-basis-5min.md](Skripte/fruehsport-basis-5min.md) | [fruehsport-basis-5min.mp3](Skripte/fruehsport-basis-5min.mp3) | 4:51 |
+**[Audio anhören (4:51)](https://github.com/stho32/Fruehsport-Audio-Generator/raw/main/Skripte/fruehsport-basis-5min.mp3)** | [Skript ansehen](Skripte/fruehsport-basis-5min.md)
 
 ## Features
 
