@@ -1,3 +1,11 @@
+---
+id: R00001
+title: Fruehsport-Audio-Generator
+type: feature
+status: done
+created: 2025-04-03
+---
+
 # fruehsport-audio
 
 ## Zweck
