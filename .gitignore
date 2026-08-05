@@ -17,3 +17,7 @@ __pycache__/
 # IDE
 .idea/
 .vscode/
+
+# Persoenliche Main Topics und lokale Claude-Konfiguration (privat, nicht veroeffentlichen)
+MainTopics/
+.claude/
