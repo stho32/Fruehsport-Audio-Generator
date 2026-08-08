@@ -23,3 +23,5 @@ MainTopics/
 .claude/
 
 Logs/
+.coverage
+.pytest_cache/
