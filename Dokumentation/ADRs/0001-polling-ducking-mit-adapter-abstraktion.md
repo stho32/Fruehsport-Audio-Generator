@@ -1,6 +1,6 @@
 # ADR-0001: Polling-Ducking mit Adapter-Abstraktion für den Podcast-Player
 
-**Status**: Akzeptiert
+**Status**: Überholt (superseded durch [ADR-0002](0002-ducking-aus-player-entfernt.md), R00003 — Spotify setzt Lautstärken bei Titelwechseln zurück; Ducking wurde vollständig aus dem Player entfernt)
 **Datum**: 2026-08-08
 **Entscheider**: sthof (Vorgaben), Claude (Ausarbeitung)
 **Kontext-Anforderung**: R00002
