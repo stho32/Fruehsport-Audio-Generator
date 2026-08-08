@@ -221,8 +221,9 @@ class PlayerBackend(ABC):
 class CommandPlayerBackend(PlayerBackend):
     """PlayerBackend, das einen externen Befehl (mpv/mplayer) als Subprozess startet."""
 
-    def __init__(self, basis_befehl: list[str]) -> None:
+    def __init__(self, basis_befehl: list[str], terminate_timeout_s: float = 5.0) -> None:
         self.basis_befehl = basis_befehl
+        self._terminate_timeout_s = terminate_timeout_s
         self._prozess: subprocess.Popen | None = None
 
     def start(self, datei: Path) -> None:
@@ -240,7 +241,7 @@ class CommandPlayerBackend(PlayerBackend):
         if self._prozess is not None and self._prozess.poll() is None:
             self._prozess.terminate()
             try:
-                self._prozess.wait(timeout=5)
+                self._prozess.wait(timeout=self._terminate_timeout_s)
             except subprocess.TimeoutExpired:
                 self._prozess.kill()
                 self._prozess.wait()
@@ -504,5 +505,5 @@ def main(argv: list[str] | None = None) -> int:
             signal.signal(signalnummer, handler)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover — Einstieg laeuft nur im E2E-Subprozess
     sys.exit(main())

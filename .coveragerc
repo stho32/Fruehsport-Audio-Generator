@@ -1,0 +1,14 @@
+# Coverage-Konfiguration fuer R00002 (podcast_player).
+#
+# Ausgenommen von der Messung:
+# - Apps/fruehsport-audio.py: bestehender Code aus R00001, in R00002 unveraendert.
+# - Apps/podcast-player.py: 6-zeiliger CLI-Wrapper; laeuft ausschliesslich als
+#   E2E-Subprozess (dort funktional getestet), In-Prozess-Tracing greift nicht.
+[run]
+omit =
+    Apps/fruehsport-audio.py
+    Apps/podcast-player.py
+
+[report]
+exclude_lines =
+    pragma: no cover

@@ -8,7 +8,8 @@ Erzeugt in einem Testverzeichnis ein ``fakebin`` mit:
 - Player-Skripte  — protokollieren jeden Abspielvorgang inkl. des Spotify-
                     Zustands zum Startzeitpunkt. Verhalten je Dateiname:
                     ``kaputt`` -> Exit 1, ``neuerstream`` -> laesst einen neuen
-                    Sink-Input (#55, 90%) auftauchen. Schlafdauer via
+                    Sink-Input (#55, 90%) auftauchen, ``sendesignal`` ->
+                    SIGINT an den Elternprozess. Schlafdauer via
                     ``FAKE_PLAYER_SLEEP``.
 
 Es laeuft nie ein echter pactl-, mpv- oder mplayer-Prozess.
@@ -65,7 +66,7 @@ else:
 '''
 
 FAKE_PLAYER_QUELLTEXT = f'''#!{sys.executable}
-import json, os, sys, tempfile, time
+import json, os, signal, sys, tempfile, time
 
 datei = sys.argv[-1]
 name = os.path.basename(datei)
@@ -94,6 +95,9 @@ if "neuerstream" in name and state_pfad:
     with os.fdopen(fd, "w") as f:
         json.dump(zustand, f)
     os.replace(tmp, state_pfad)
+
+if "sendesignal" in name:
+    os.kill(os.getppid(), signal.SIGINT)
 
 time.sleep(float(os.environ.get("FAKE_PLAYER_SLEEP", "0")))
 sys.exit(1 if "kaputt" in name else 0)

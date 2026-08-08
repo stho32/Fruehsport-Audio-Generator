@@ -10,6 +10,8 @@ Anforderungen/user-stories/R00002.md.
 from __future__ import annotations
 
 import json
+import signal
+import sys
 from pathlib import Path
 
 import pytest
@@ -256,6 +258,97 @@ class TestFehlertoleranz:
         assert ("ende", "c.mp3") in ereignisse
         # Trotz Fehler wird Spotify am Ende wiederhergestellt:
         assert umgebung.spotify_inputs() == {10: 100}
+
+
+# --- CommandPlayerBackend-Lebenszyklus (harmloser Python-Kindprozess) ---------
+
+def python_backend(*code: str, **kwargs) -> pp.CommandPlayerBackend:
+    """Backend, dessen 'Player' ein kurzes Python-Programm ist (kein echter Player).
+
+    Der Dateiname wird vom Backend als letztes Argument angehaengt und vom
+    Programm ignoriert.
+    """
+    return pp.CommandPlayerBackend([sys.executable, "-c", *code], **kwargs)
+
+
+class TestCommandPlayerBackend:
+    def test_poll_vor_start_liefert_none(self):
+        assert python_backend("pass").poll() is None
+
+    def test_erfolgreiches_ende_liefert_exit_0(self):
+        backend = python_backend("pass")
+        backend.start(Path("egal.mp3"))
+
+        while (exit_code := backend.poll()) is None:
+            pass
+
+        assert exit_code == 0
+
+    def test_fehlschlag_liefert_exit_code_ungleich_0(self):
+        backend = python_backend("import sys; sys.exit(3)")
+        backend.start(Path("egal.mp3"))
+
+        while (exit_code := backend.poll()) is None:
+            pass
+
+        assert exit_code == 3
+
+    def test_terminate_beendet_laufenden_prozess(self):
+        backend = python_backend("import time; time.sleep(30)")
+        backend.start(Path("egal.mp3"))
+        assert backend.poll() is None  # laeuft wirklich
+
+        backend.terminate()
+
+        assert backend.poll() is not None  # beendet, kein Zombie
+
+    def test_terminate_ohne_laufenden_prozess_ist_harmlos(self):
+        backend = python_backend("import time; time.sleep(30)")
+        backend.terminate()  # nie gestartet — keine Exception
+
+        backend.start(Path("egal.mp3"))
+        backend.terminate()
+        backend.terminate()  # bereits beendet — idempotent
+
+        assert backend.poll() is not None
+
+    def test_terminate_killt_prozess_der_sigterm_ignoriert(self):
+        backend = python_backend(
+            "import signal, time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "time.sleep(30)",
+            terminate_timeout_s=0.3,
+        )
+        backend.start(Path("egal.mp3"))
+        import time as _time
+        _time.sleep(0.3)  # Kind Zeit geben, den SIGTERM-Ignore zu installieren
+
+        backend.terminate()
+
+        assert backend.poll() is not None  # via SIGKILL beendet
+
+
+# --- US-5: Sauberer Abbruch (Signal-Handler von main) -------------------------
+
+class TestSignalHandlerVonMain:
+    def test_sigint_waehrend_wiedergabe_bricht_ab_und_stellt_handler_wieder_her(
+        self, umgebung, tmp_path, mp3s, monkeypatch
+    ):
+        umgebung.setze_spotify_inputs({10: 100})
+        monkeypatch.setenv("FAKE_PLAYER_SLEEP", "5")
+        # Der Fake-Player schickt bei "sendesignal" SIGINT an diesen Prozess:
+        dateien = mp3s("sendesignal.mp3")
+        backend = str(umgebung.fakebin / "fake-player")
+        handler_vorher = signal.getsignal(signal.SIGINT)
+
+        exit_code, log = starte_main(
+            umgebung, tmp_path, [*dateien, "--backend", backend]
+        )
+
+        assert exit_code == 130
+        assert umgebung.spotify_inputs() == {10: 100}  # wiederhergestellt
+        assert [e["ereignis"] for e in log] == ["start", "abbruch"]
+        assert signal.getsignal(signal.SIGINT) is handler_vorher  # Handler restauriert
 
 
 # --- US-6: Abspiel-Log (Standardpfad) -----------------------------------------
