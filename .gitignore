@@ -21,3 +21,5 @@ __pycache__/
 # Persoenliche Main Topics und lokale Claude-Konfiguration (privat, nicht veroeffentlichen)
 MainTopics/
 .claude/
+
+Logs/
