@@ -63,15 +63,41 @@ Sehr gut! Nächste Übung...
 | `#PAUSE X` | Fügt X Sekunden Stille ein. |
 | `#INCLUDE datei.mp3` | Bindet eine externe MP3-Datei ein. |
 
+## Podcast-Player mit Spotify-Ducking
+
+`Apps/podcast-player.py` spielt lokale MP3s als eine Playlist ab und senkt laufende
+Spotify-Streams für die gesamte Dauer ab (PulseAudio/PipeWire via `pactl`).
+Neue Spotify-Streams (Titelwechsel, Pause/Play) werden alle 2 s erkannt und sanft
+abgesenkt; am Ende werden alle Originallautstärken wiederhergestellt.
+
+```bash
+# Dateien und/oder Ordner (Ordner: enthaltene *.mp3 alphabetisch)
+uv run Apps/podcast-player.py folge1.mp3 folge2.mp3 ~/Podcasts/heute/
+
+# Duck-Level anpassen (Default: 20 %)
+uv run Apps/podcast-player.py --level 35 folge.mp3
+```
+
+- Player-Backend: mpv (Default), mplayer als Fallback
+- Abspiel-Log: `Logs/podcast-player.jsonl` (eine JSON-Zeile je start/ende/abbruch/fehler)
+- Ctrl+C/SIGTERM: Wiedergabe stoppt, Spotify-Lautstärken werden wiederhergestellt
+- Details: `Anforderungen/R00002-podcast-player-cli.md`, ADR unter `Dokumentation/ADRs/`
+- Tests: `uv run --with pytest --with pytest-cov python -m pytest Tests --cov=Apps`
+
 ## Projektstruktur
 
 ```
 ├── Apps/
-│   └── fruehsport-audio.py    # Hauptanwendung
+│   ├── fruehsport-audio.py    # Hauptanwendung (TTS-Generator)
+│   ├── podcast-player.py      # Podcast-Player CLI (R00002)
+│   └── podcast_player.py      # Kernmodul des Players (importierbar/testbar)
 ├── Skripte/
 │   ├── *.md                   # Eingabe-Skripte
 │   └── *.mp3                  # Generierte Audio-Dateien
+├── Tests/                     # Test-Pyramide (Unit, Integration, E2E)
 ├── Anforderungen/             # Spezifikationen
+├── Dokumentation/ADRs/        # Architektur-Entscheidungen
+├── Logs/                      # Abspiel-Log des Players (gitignored)
 └── Musik/                     # Hintergrundmusik (optional, gitignored)
 ```
 
