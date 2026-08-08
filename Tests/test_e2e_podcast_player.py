@@ -1,8 +1,9 @@
-"""E2E-Tests fuer R00002: das CLI ``Apps/podcast-player.py`` als echter Subprozess.
+"""E2E-Tests fuer den Player: das CLI ``Apps/podcast-player.py`` als echter Subprozess.
 
-Player und pactl kommen als Fake-Skripte ueber PATH-Injektion aus ``fakes.py``
-— es laeuft kein echtes Audio und kein Spotify. Kein Netzwerk-Port noetig
-(reines CLI); die Skill-Regel "freier Port" ist damit gegenstandslos.
+Der Player kommt als Fake-Skript ueber PATH-Injektion aus ``fakes.py`` —
+es laeuft kein echtes Audio; ein pactl existiert im PATH bewusst nicht
+(R00003). Kein Netzwerk-Port noetig (reines CLI); die Skill-Regel
+"freier Port" ist damit gegenstandslos.
 """
 
 from __future__ import annotations
@@ -23,18 +24,13 @@ CLI = PROJEKT_ROOT / "Apps" / "podcast-player.py"
 
 @pytest.fixture
 def umgebung(tmp_path):
-    fake = FakeUmgebung(tmp_path, player_namen=("fake-player", "mpv"))
-    fake.setze_spotify_inputs({})
-    return fake
+    return FakeUmgebung(tmp_path, player_namen=("fake-player", "mpv"))
 
 
 def cli_befehl(umgebung, tmp_path, argumente):
     log_datei = tmp_path / "abspiel-log.jsonl"
     return (
-        [
-            sys.executable, str(CLI), *argumente,
-            "--fade-delay", "0", "--log-datei", str(log_datei),
-        ],
+        [sys.executable, str(CLI), *argumente, "--log-datei", str(log_datei)],
         log_datei,
     )
 
@@ -64,8 +60,7 @@ def erstelle_mp3s(tmp_path, *namen):
 
 
 class TestE2EPlaylist:
-    def test_drei_dateien_reihenfolge_ducking_und_log(self, umgebung, tmp_path):
-        umgebung.setze_spotify_inputs({10: 100})
+    def test_drei_dateien_reihenfolge_und_log(self, umgebung, tmp_path):
         dateien = erstelle_mp3s(tmp_path, "a.mp3", "b.mp3", "c.mp3")
         backend = str(umgebung.fakebin / "fake-player")
 
@@ -74,12 +69,8 @@ class TestE2EPlaylist:
         )
 
         assert ergebnis.returncode == 0
-        # Reihenfolge und durchgehendes Ducking (Zustand beim Start jeder Datei):
         abspielungen = umgebung.abgespielte_dateien()
         assert [Path(e["datei"]).name for e in abspielungen] == ["a.mp3", "b.mp3", "c.mp3"]
-        assert [e["sink_state"] for e in abspielungen] == [{"10": 20}] * 3
-        # Wiederherstellung erst nach der letzten Datei:
-        assert umgebung.spotify_inputs() == {10: 100}
         # Abspiel-Log: start/ende je Datei, maschinenlesbar:
         assert [(e["ereignis"], Path(e["datei"]).name) for e in log] == [
             ("start", "a.mp3"), ("ende", "a.mp3"),
@@ -127,26 +118,34 @@ class TestE2EPlaylist:
         assert umgebung.abgespielte_dateien() == []
 
 
-class TestE2ENeuerStream:
-    def test_neuer_stream_wird_binnen_pollintervall_geduckt(self, umgebung, tmp_path):
-        umgebung.setze_spotify_inputs({10: 100})
-        dateien = erstelle_mp3s(tmp_path, "neuerstream.mp3")
+class TestE2EKeinDucking:
+    """US-1 (R00003): der Player fasst keine Lautstaerken mehr an."""
+
+    def test_level_wird_als_unbekanntes_argument_abgewiesen(self, umgebung, tmp_path):
+        dateien = erstelle_mp3s(tmp_path, "a.mp3")
         backend = str(umgebung.fakebin / "fake-player")
-        env_extra = umgebung.umgebungsvariablen()
-        env_extra["FAKE_PLAYER_SLEEP"] = "1"
-        befehl, _log_datei = cli_befehl(
-            umgebung, tmp_path,
-            [*dateien, "--backend", backend, "--poll-intervall", "0.2"],
+
+        ergebnis, log = starte_cli(
+            umgebung, tmp_path, ["--level", "35", *dateien, "--backend", backend]
         )
 
-        ergebnis = subprocess.run(
-            befehl, env=env_extra, capture_output=True, text=True,
-            timeout=30, check=False,
+        assert ergebnis.returncode == 2
+        assert "--level" in ergebnis.stderr
+        assert log == []
+        assert umgebung.abgespielte_dateien() == []
+
+    def test_wiedergabe_ohne_pactl_im_pfad_laeuft_fehlerfrei(self, umgebung, tmp_path):
+        # PATH enthaelt nur das fakebin — und dort liegt kein pactl.
+        assert not (umgebung.fakebin / "pactl").exists()
+        dateien = erstelle_mp3s(tmp_path, "a.mp3")
+        backend = str(umgebung.fakebin / "fake-player")
+
+        ergebnis, log = starte_cli(
+            umgebung, tmp_path, [*dateien, "--backend", backend]
         )
 
         assert ergebnis.returncode == 0
-        assert (55, 20) in umgebung.set_volume_aufrufe()
-        assert umgebung.spotify_inputs() == {10: 100, 55: 90}
+        assert [e["ereignis"] for e in log] == ["start", "ende"]
 
 
 class TestE2ESignale:
@@ -155,10 +154,9 @@ class TestE2ESignale:
         [(signal.SIGINT, 130), (signal.SIGTERM, 143)],
         ids=["SIGINT", "SIGTERM"],
     )
-    def test_signal_stoppt_wiedergabe_und_stellt_lautstaerke_her(
+    def test_signal_stoppt_wiedergabe_mit_abbruch_log(
         self, umgebung, tmp_path, signalnummer, erwarteter_exit
     ):
-        umgebung.setze_spotify_inputs({10: 100})
         dateien = erstelle_mp3s(tmp_path, "lang.mp3")
         backend = str(umgebung.fakebin / "fake-player")
         env = umgebung.umgebungsvariablen()
@@ -175,13 +173,11 @@ class TestE2ESignale:
         while not umgebung.player_log.exists() and time.monotonic() < frist:
             time.sleep(0.05)
         assert umgebung.player_log.exists(), "Wiedergabe kam nie an"
-        assert umgebung.spotify_inputs() == {10: 20}  # geduckt waehrend Wiedergabe
 
         prozess.send_signal(signalnummer)
         exit_code = prozess.wait(timeout=15)
 
         assert exit_code == erwarteter_exit
-        assert umgebung.spotify_inputs() == {10: 100}  # wiederhergestellt
         log = [
             json.loads(z)
             for z in log_datei.read_text(encoding="utf-8").splitlines()

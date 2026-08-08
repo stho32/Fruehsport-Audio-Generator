@@ -1,8 +1,8 @@
-"""Gemeinsame Test-Infrastruktur fuer R00002 (podcast_player).
+"""Gemeinsame Test-Infrastruktur fuer den podcast_player (R00002/R00003).
 
 Macht das Modul ``Apps/podcast_player.py`` importierbar und stellt Fakes
 bereit, die echte Zustandsuebergaenge abbilden (Skill test-ehrlichkeit):
-kein echter pactl-, mpv- oder mplayer-Aufruf in der gesamten Suite.
+kein echter mpv- oder mplayer-Aufruf in der gesamten Suite.
 """
 
 from __future__ import annotations
@@ -13,27 +13,7 @@ from pathlib import Path
 PROJEKT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJEKT_ROOT / "Apps"))
 
-from podcast_player import AudioMixer, PlayerBackend
-
-
-class FakeAudioMixer(AudioMixer):
-    """AudioMixer-Fake mit echtem Zustand: Sink-Inputs als dict id -> Volumen%.
-
-    ``set_volume`` veraendert den Zustand wirklich und protokolliert jeden
-    Aufruf, damit Tests Vorher/Nachher und Fade-Verlaeufe pruefen koennen.
-    """
-
-    def __init__(self, inputs: dict[int, int] | None = None) -> None:
-        self.inputs: dict[int, int] = dict(inputs or {})
-        self.set_volume_aufrufe: list[tuple[int, int]] = []
-
-    def list_spotify_inputs(self) -> dict[int, int]:
-        return dict(self.inputs)
-
-    def set_volume(self, sink_input_id: int, prozent: int) -> None:
-        self.set_volume_aufrufe.append((sink_input_id, prozent))
-        if sink_input_id in self.inputs:
-            self.inputs[sink_input_id] = prozent
+from podcast_player import PlayerBackend
 
 
 class FakePlayerBackend(PlayerBackend):
@@ -43,8 +23,7 @@ class FakePlayerBackend(PlayerBackend):
     - ``polls_bis_ende``: wie oft ``poll()`` None liefert, bevor der
       hinterlegte Exit-Code zurueckkommt (simuliert Spieldauer).
     - ``bei_start``: optionaler Hook (datei -> None), z.B. um waehrend der
-      "Wiedergabe" einen neuen Spotify-Stream im FakeAudioMixer auftauchen
-      zu lassen.
+      "Wiedergabe" einen Abbruch anzufordern.
     """
 
     def __init__(

@@ -4,12 +4,12 @@
 # dependencies = []
 # ///
 
-"""podcast-player: CLI-Einstieg fuer den Podcast-Player mit Spotify-Ducking.
+"""podcast-player: CLI-Einstieg fuer den Podcast-Player (reines Abspielen).
 
 Verwendung:
-    uv run Apps/podcast-player.py <datei.mp3|ordner> [weitere ...] [--level PROZENT]
+    uv run Apps/podcast-player.py <datei.mp3|ordner> [weitere ...]
 
-Anforderung: R00002 — die Implementierung liegt im importierbaren Modul
+Anforderungen: R00002, R00003 — die Implementierung liegt im importierbaren Modul
 ``podcast_player.py`` im selben Verzeichnis (testbar ohne Subprozess).
 """
 

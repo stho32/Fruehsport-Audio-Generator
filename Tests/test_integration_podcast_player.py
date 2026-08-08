@@ -1,10 +1,9 @@
-"""Integrationstests fuer podcast_player (R00002).
+"""Integrationstests fuer podcast_player (R00002/R00003).
 
 Testen das Zusammenspiel der Module: ``main()`` in-process mit den
-ausfuehrbaren Fake-Skripten (pactl, Player) aus ``fakes.py`` — Subprozess-
-Plumbing inklusive, aber ohne echtes pactl/mpv/mplayer und ohne Audio.
-Szenarien entsprechen den User Stories in
-Anforderungen/user-stories/R00002.md.
+ausfuehrbaren Fake-Player-Skripten aus ``fakes.py`` — Subprozess-Plumbing
+inklusive, aber ohne echtes mpv/mplayer und ohne Audio. Szenarien
+entsprechen den User Stories in Anforderungen/user-stories/R00003.md.
 """
 
 from __future__ import annotations
@@ -23,7 +22,6 @@ from fakes import FakeUmgebung
 def umgebung(tmp_path, monkeypatch):
     """FakeUmgebung, deren Variablen (inkl. PATH=fakebin) aktiv sind."""
     fake = FakeUmgebung(tmp_path, player_namen=("fake-player", "mpv", "mplayer"))
-    fake.setze_spotify_inputs({})
     for name, wert in fake.umgebungsvariablen().items():
         monkeypatch.setenv(name, wert)
     return fake
@@ -44,9 +42,7 @@ def mp3s(tmp_path):
 
 def starte_main(umgebung, tmp_path, argumente):
     log_datei = tmp_path / "abspiel-log.jsonl"
-    exit_code = pp.main(
-        [*argumente, "--fade-delay", "0", "--log-datei", str(log_datei)]
-    )
+    exit_code = pp.main([*argumente, "--log-datei", str(log_datei)])
     log = (
         [json.loads(z) for z in log_datei.read_text(encoding="utf-8").splitlines()]
         if log_datei.exists()
@@ -55,32 +51,7 @@ def starte_main(umgebung, tmp_path, argumente):
     return exit_code, log
 
 
-# --- PactlAudioMixer gegen das Fake-pactl-Skript (Subprozess-Plumbing) --------
-
-class TestPactlAudioMixerMitFakePactl:
-    def test_list_spotify_inputs_liest_zustand(self, umgebung):
-        umgebung.setze_spotify_inputs({42: 100, 43: 65})
-
-        inputs = pp.PactlAudioMixer().list_spotify_inputs()
-
-        assert inputs == {42: 100, 43: 65}
-
-    def test_set_volume_aendert_zustand_wirklich(self, umgebung):
-        umgebung.setze_spotify_inputs({42: 100})
-
-        pp.PactlAudioMixer().set_volume(42, 20)
-
-        assert umgebung.spotify_inputs() == {42: 20}
-        assert pp.PactlAudioMixer().list_spotify_inputs() == {42: 20}
-
-    def test_pactl_fehler_ergibt_leeres_dict(self, umgebung, monkeypatch):
-        umgebung.setze_spotify_inputs({42: 100})
-        monkeypatch.delenv("FAKE_PACTL_STATE")  # Fake-pactl stuerzt ab
-
-        assert pp.PactlAudioMixer().list_spotify_inputs() == {}
-
-
-# --- US-1: Playlist abspielen -------------------------------------------------
+# --- US-2: Playlist abspielen -------------------------------------------------
 
 class TestPlaylistAbspielen:
     def test_mehrere_dateien_in_aufrufreihenfolge(self, umgebung, tmp_path, mp3s):
@@ -126,30 +97,25 @@ class TestPlaylistAbspielen:
         assert umgebung.abgespielte_dateien() == []
 
 
-# --- US-2: Durchgehendes Ducking ueber die Playlist ---------------------------
+# --- US-1: Keine Lautstaerke-Eingriffe, --level abgewiesen --------------------
 
-class TestDuckingUeberPlaylist:
-    def test_ducken_am_anfang_wiederherstellen_erst_am_ende(
-        self, umgebung, tmp_path, mp3s
+class TestKeineLautstaerkeEingriffe:
+    def test_level_wird_als_unbekanntes_argument_abgewiesen(
+        self, umgebung, tmp_path, mp3s, capsys
     ):
-        umgebung.setze_spotify_inputs({10: 100, 11: 80})
-        dateien = mp3s("a.mp3", "b.mp3")
-        backend = str(umgebung.fakebin / "fake-player")
+        dateien = mp3s("a.mp3")
 
-        exit_code, _log = starte_main(
-            umgebung, tmp_path, [*dateien, "--backend", backend]
-        )
+        with pytest.raises(SystemExit) as abbruch:
+            starte_main(umgebung, tmp_path, ["--level", "35", *dateien])
 
-        assert exit_code == 0
-        # Beim Start JEDER Datei war Spotify geduckt — kein Hochstellen dazwischen:
-        for eintrag in umgebung.abgespielte_dateien():
-            assert eintrag["sink_state"] == {"10": 20, "11": 20}
-        # Nach dem Ende der letzten Datei: Originale wiederhergestellt.
-        assert umgebung.spotify_inputs() == {10: 100, 11: 80}
+        assert abbruch.value.code == 2
+        assert "--level" in capsys.readouterr().err
+        assert umgebung.abgespielte_dateien() == []
 
-    def test_ohne_spotify_laeuft_wiedergabe_ohne_ducking(
-        self, umgebung, tmp_path, mp3s
-    ):
+    def test_wiedergabe_startet_keinen_pactl_prozess(self, umgebung, tmp_path, mp3s):
+        # PATH enthaelt nur das fakebin — ohne pactl. Ein pactl-Aufruf des
+        # Players wuerde hier als OSError/Fehler sichtbar.
+        assert not (umgebung.fakebin / "pactl").exists()
         dateien = mp3s("a.mp3")
         backend = str(umgebung.fakebin / "fake-player")
 
@@ -158,49 +124,12 @@ class TestDuckingUeberPlaylist:
         )
 
         assert exit_code == 0
-        assert umgebung.set_volume_aufrufe() == []
         assert [e["ereignis"] for e in log] == ["start", "ende"]
 
 
-# --- US-3: Neue Spotify-Streams waehrend der Wiedergabe -----------------------
+# --- US-2.3: Backend-Wahl -----------------------------------------------------
 
-class TestNeuerStreamWaehrendWiedergabe:
-    def test_neuer_sink_input_wird_geduckt_und_am_ende_wiederhergestellt(
-        self, umgebung, tmp_path, mp3s, monkeypatch
-    ):
-        umgebung.setze_spotify_inputs({10: 100})
-        # Der Fake-Player laesst bei "neuerstream" Input #55 (90%) auftauchen
-        # und spielt lange genug, dass die Ueberwachung (0.2 s) zuschlaegt.
-        monkeypatch.setenv("FAKE_PLAYER_SLEEP", "1")
-        dateien = mp3s("neuerstream.mp3")
-        backend = str(umgebung.fakebin / "fake-player")
-
-        exit_code, _log = starte_main(
-            umgebung, tmp_path,
-            [*dateien, "--backend", backend, "--poll-intervall", "0.2"],
-        )
-
-        assert exit_code == 0
-        assert (55, 20) in umgebung.set_volume_aufrufe()  # waehrend der Wiedergabe geduckt
-        assert umgebung.spotify_inputs() == {10: 100, 55: 90}  # beide wiederhergestellt
-
-
-# --- US-4: Duck-Level und Backend-Wahl ----------------------------------------
-
-class TestLevelUndBackend:
-    def test_eigenes_duck_level_wirkt(self, umgebung, tmp_path, mp3s):
-        umgebung.setze_spotify_inputs({10: 100})
-        dateien = mp3s("a.mp3")
-        backend = str(umgebung.fakebin / "fake-player")
-
-        exit_code, _log = starte_main(
-            umgebung, tmp_path, [*dateien, "--backend", backend, "--level", "35"]
-        )
-
-        assert exit_code == 0
-        assert umgebung.abgespielte_dateien()[0]["sink_state"] == {"10": 35}
-        assert umgebung.spotify_inputs() == {10: 100}
-
+class TestBackendWahl:
     def test_mpv_ist_default_mit_no_video_und_quiet(self, umgebung, tmp_path, mp3s):
         dateien = mp3s("a.mp3")
 
@@ -234,13 +163,12 @@ class TestLevelUndBackend:
         assert umgebung.abgespielte_dateien() == []
 
 
-# --- US-7: Fehlertoleranz in der Playlist -------------------------------------
+# --- US-5: Fehlertoleranz in der Playlist -------------------------------------
 
 class TestFehlertoleranz:
     def test_kaputte_datei_mittendrin_rest_laeuft_exit_ungleich_0(
         self, umgebung, tmp_path, mp3s
     ):
-        umgebung.setze_spotify_inputs({10: 100})
         dateien = mp3s("a.mp3", "kaputt.mp3", "c.mp3")
         backend = str(umgebung.fakebin / "fake-player")
 
@@ -255,8 +183,6 @@ class TestFehlertoleranz:
         ereignisse = [(e["ereignis"], Path(e["datei"]).name) for e in log]
         assert ("fehler", "kaputt.mp3") in ereignisse
         assert ("ende", "c.mp3") in ereignisse
-        # Trotz Fehler wird Spotify am Ende wiederhergestellt:
-        assert umgebung.spotify_inputs() == {10: 100}
 
 
 # --- CommandPlayerBackend-Lebenszyklus (harmloser Python-Kindprozess) ---------
@@ -327,13 +253,12 @@ class TestCommandPlayerBackend:
         assert backend.poll() is not None  # via SIGKILL beendet
 
 
-# --- US-5: Sauberer Abbruch (Signal-Handler von main) -------------------------
+# --- US-4: Sauberer Abbruch (Signal-Handler von main) -------------------------
 
 class TestSignalHandlerVonMain:
     def test_sigint_waehrend_wiedergabe_bricht_ab_und_stellt_handler_wieder_her(
         self, umgebung, tmp_path, mp3s, monkeypatch
     ):
-        umgebung.setze_spotify_inputs({10: 100})
         monkeypatch.setenv("FAKE_PLAYER_SLEEP", "5")
         # Der Fake-Player schickt bei "sendesignal" SIGINT an diesen Prozess:
         dateien = mp3s("sendesignal.mp3")
@@ -345,12 +270,11 @@ class TestSignalHandlerVonMain:
         )
 
         assert exit_code == 130
-        assert umgebung.spotify_inputs() == {10: 100}  # wiederhergestellt
         assert [e["ereignis"] for e in log] == ["start", "abbruch"]
         assert signal.getsignal(signal.SIGINT) is handler_vorher  # Handler restauriert
 
 
-# --- US-6: Abspiel-Log (Standardpfad) -----------------------------------------
+# --- US-3: Abspiel-Log (Standardpfad) -----------------------------------------
 
 class TestLogStandardpfad:
     def test_standard_log_pfad_liegt_im_projekt(self):
