@@ -14,10 +14,9 @@ import signal
 import sys
 from pathlib import Path
 
+import podcast_player as pp
 import pytest
 from fakes import FakeUmgebung
-
-import podcast_player as pp
 
 
 @pytest.fixture

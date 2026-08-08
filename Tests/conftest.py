@@ -13,7 +13,7 @@ from pathlib import Path
 PROJEKT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJEKT_ROOT / "Apps"))
 
-from podcast_player import AudioMixer, PlayerBackend  # noqa: E402
+from podcast_player import AudioMixer, PlayerBackend
 
 
 class FakeAudioMixer(AudioMixer):

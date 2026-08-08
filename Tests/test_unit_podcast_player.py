@@ -7,11 +7,9 @@ import json
 import signal
 from pathlib import Path
 
+import podcast_player as pp
 import pytest
 from conftest import FakeAudioMixer, FakePlayerBackend, FakeUhr
-
-import podcast_player as pp
-
 
 # --- parse_spotify_sink_inputs ----------------------------------------------
 

@@ -29,9 +29,9 @@ import subprocess
 import sys
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 # --- Festlegungen (ADR-0001) -------------------------------------------------
 
@@ -79,7 +79,7 @@ class PactlAudioMixer(AudioMixer):
     def list_spotify_inputs(self) -> dict[int, int]:
         ergebnis = subprocess.run(
             [self._pactl, "list", "sink-inputs"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, check=False,
         )
         if ergebnis.returncode != 0:
             return {}
@@ -88,7 +88,7 @@ class PactlAudioMixer(AudioMixer):
     def set_volume(self, sink_input_id: int, prozent: int) -> None:
         subprocess.run(
             [self._pactl, "set-sink-input-volume", str(sink_input_id), f"{prozent}%"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, check=False,
         )
 
 

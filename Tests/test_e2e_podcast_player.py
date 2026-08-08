@@ -43,7 +43,7 @@ def starte_cli(umgebung, tmp_path, argumente, **popen_kwargs):
     befehl, log_datei = cli_befehl(umgebung, tmp_path, argumente)
     ergebnis = subprocess.run(
         befehl, env=umgebung.umgebungsvariablen(), capture_output=True,
-        text=True, timeout=30, **popen_kwargs,
+        text=True, timeout=30, check=False, **popen_kwargs,
     )
     log = (
         [json.loads(z) for z in log_datei.read_text(encoding="utf-8").splitlines()]
@@ -134,13 +134,14 @@ class TestE2ENeuerStream:
         backend = str(umgebung.fakebin / "fake-player")
         env_extra = umgebung.umgebungsvariablen()
         env_extra["FAKE_PLAYER_SLEEP"] = "1"
-        befehl, log_datei = cli_befehl(
+        befehl, _log_datei = cli_befehl(
             umgebung, tmp_path,
             [*dateien, "--backend", backend, "--poll-intervall", "0.2"],
         )
 
         ergebnis = subprocess.run(
-            befehl, env=env_extra, capture_output=True, text=True, timeout=30
+            befehl, env=env_extra, capture_output=True, text=True,
+            timeout=30, check=False,
         )
 
         assert ergebnis.returncode == 0
