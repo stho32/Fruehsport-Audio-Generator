@@ -63,25 +63,21 @@ Sehr gut! Nächste Übung...
 | `#PAUSE X` | Fügt X Sekunden Stille ein. |
 | `#INCLUDE datei.mp3` | Bindet eine externe MP3-Datei ein. |
 
-## Podcast-Player mit Spotify-Ducking
+## Podcast-Player
 
-`Apps/podcast-player.py` spielt lokale MP3s als eine Playlist ab und senkt laufende
-Spotify-Streams für die gesamte Dauer ab (PulseAudio/PipeWire via `pactl`).
-Neue Spotify-Streams (Titelwechsel, Pause/Play) werden alle 2 s erkannt und sanft
-abgesenkt; am Ende werden alle Originallautstärken wiederhergestellt.
+`Apps/podcast-player.py` spielt lokale MP3s als eine Playlist ab — reines Abspielen,
+ohne Eingriffe in Lautstärken. Sollen andere Quellen (z. B. Spotify) leiser laufen,
+senkt man sie manuell ab, etwa per `~/.claude/scripts/spotify-ducking.sh`.
 
 ```bash
 # Dateien und/oder Ordner (Ordner: enthaltene *.mp3 alphabetisch)
 uv run Apps/podcast-player.py folge1.mp3 folge2.mp3 ~/Podcasts/heute/
-
-# Duck-Level anpassen (Default: 20 %)
-uv run Apps/podcast-player.py --level 35 folge.mp3
 ```
 
 - Player-Backend: mpv (Default), mplayer als Fallback
 - Abspiel-Log: `Logs/podcast-player.jsonl` (eine JSON-Zeile je start/ende/abbruch/fehler)
-- Ctrl+C/SIGTERM: Wiedergabe stoppt, Spotify-Lautstärken werden wiederhergestellt
-- Details: `Anforderungen/R00002-podcast-player-cli.md`, ADR unter `Dokumentation/ADRs/`
+- Ctrl+C/SIGTERM: Wiedergabe stoppt sauber (Exit 130/143)
+- Details: `Anforderungen/R00002-podcast-player-cli.md`, `Anforderungen/R00003-ducking-aus-player-entfernen.md`, ADRs unter `Dokumentation/ADRs/`
 - Tests: `uv run --with pytest --with pytest-cov python -m pytest Tests --cov=Apps`
 
 ## Projektstruktur
