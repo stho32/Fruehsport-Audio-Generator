@@ -25,4 +25,4 @@ created: YYYY-MM-DD
 | ID     | Titel                       | Typ     | Status |
 |--------|-----------------------------|---------|--------|
 | R00001 | Fruehsport-Audio-Generator  | feature | done   |
-| R00002 | Podcast-Player CLI mit robustem Spotify-Ducking | feature | draft |
+| R00002 | Podcast-Player CLI mit robustem Spotify-Ducking | feature | done   |
